@@ -1,0 +1,1 @@
+{"model_name": "AkshatSurolia/ViT-FaceMask-Finetuned", "dataset_name": "airplane", "score": 0.7787994657627334, "features_pth": "./checkpoints/image-classification_airplane/features.npy", "targets_pth": "./checkpoints/image-classification_airplane/targets.npy"}
