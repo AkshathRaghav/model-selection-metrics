@@ -52,8 +52,9 @@ class Models:
 
     def __call__(self, task, n):
         if task in self.task_models:
+            vals = self.task_models[task][self.idx:self.idx+n]
             self.idx = n
-            return self.task_models[task][self.idx:self.idx+n]
+            return vals 
         else:
             return []
             
@@ -92,3 +93,4 @@ class Models:
         with open('../mapping.json') as f: 
             records = json.load(f)
         return records
+

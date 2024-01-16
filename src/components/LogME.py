@@ -161,7 +161,7 @@ class LogME(object):
 
         self.ms = np.stack(self.ms)
         progress_bar.close()
-
+        
         print(evidences)
         return np.mean(evidences)
 
