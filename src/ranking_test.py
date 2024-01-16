@@ -6,16 +6,16 @@ from components.Examples import (
     load_text_example,
     load_audio_example,
 )
-import components.Logger as logger
+import components.Logger as log
 import logging
 
-dataloader = load_image_example()
+dataloader = load_text_example()
 
 models = Models()
 
-config = {"task": "image-classification", "dataset": dataloader, "n": 3}
+config = {"task": "text-classification", "dataset": dataloader, "n": 3}
 
-logger.setup(config) 
+log.setup(config)
 
 benchmarker = Benchmarker(
     models, ckpt=True, logme=True, regression=False, auto_increment_if_failed=True

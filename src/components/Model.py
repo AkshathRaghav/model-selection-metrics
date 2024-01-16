@@ -53,7 +53,7 @@ class Models:
     def __call__(self, task, n):
         if task in self.task_models:
             vals = self.task_models[task][self.idx:self.idx+n]
-            self.idx = n
+            self.idx = n + 1
             return vals 
         else:
             return []

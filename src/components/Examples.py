@@ -27,19 +27,19 @@ def load_image_example():
 
 def load_text_example():
     def load_tweet_classifier():
-        df = pd.read_csv("./assets/tweet/Corona_NLP_train.csv", encoding="latin-1")
+        df = pd.read_csv("../assets/tweet/Corona_NLP_train.csv", encoding="latin-1")
         df = df[["OriginalTweet", "Sentiment"]]
         return df.astype(str).values.tolist()
 
     logging.info(
-        "TextDataLoader: Loading Aircraft Dataset, shuffled and limited to 1000 images."
+        "TextDataLoader: Loading Tweet Classification Dataset, shuffled and limited to 500 images."
     )
-    return TextDataLoader(load_tweet_classifier(), name="tweets", shuffle=True, n=1000)
+    return TextDataLoader(load_tweet_classifier(), name="tweets", shuffle=True, n=20)
 
 
 def load_audio_example():
     def load_esc50_classifier():
-        df = pd.read_csv("./assets/esc_50/esc50.csv", encoding="latin-1")
+        df = pd.read_csv("../assets/esc_50/esc50.csv", encoding="latin-1")
         filenames, targets = df["filename"].tolist(), df["target"].tolist()
         return [
             [f"../assets/esc_50/audio/{filename}", target]
@@ -47,7 +47,7 @@ def load_audio_example():
         ]
 
     logging.info(
-        "AudioDataLoader: Loading Aircraft Dataset, shuffled and limited to 1000 images."
+        "AudioDataLoader: Loading ESC50 Dataset, shuffled and limited to 500 images."
     )
     return AudioDataLoader(
         load_esc50_classifier(),
@@ -55,5 +55,5 @@ def load_audio_example():
         type="wav",
         normalized=False,
         shuffle=True,
-        n=1000,
+        n=500,
     )

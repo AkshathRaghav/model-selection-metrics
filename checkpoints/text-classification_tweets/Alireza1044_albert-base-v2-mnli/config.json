@@ -1,1 +1,0 @@
-{"model_name": "Alireza1044/albert-base-v2-mnli", "dataset_name": "tweets", "score": -1.9823747267534553, "features_pth": "./checkpoints/text-classification_tweets/Alireza1044_albert-base-v2-mnli//features.npy", "targets_pth": "./checkpoints/text-classification_tweets/Alireza1044_albert-base-v2-mnli//targets.npy"}

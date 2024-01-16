@@ -1,1 +1,0 @@
-{"model_name": "A-bhimany-u08/bert-base-cased-qqp", "dataset_name": "tweets", "score": -1.750395323947131, "features_pth": "./checkpoints/text-classification_tweets/A-bhimany-u08_bert-base-cased-qqp//features.npy", "targets_pth": "./checkpoints/text-classification_tweets/A-bhimany-u08_bert-base-cased-qqp//targets.npy"}

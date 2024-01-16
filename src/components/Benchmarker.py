@@ -33,7 +33,7 @@ class Benchmarker:
         self.auto_increment_if_failed = auto_increment_if_failed
         self.only_feature = only_feature
         if int(logme) + int(leep) + int(nce) != 1:
-            logger.error('Cannot have more than one of logme, leep, or nce as True!')
+            logging.error('Cannot have more than one of logme, leep, or nce as True!')
             raise ValueError("ERROR: Only one of logme, leep, or nce can be True")
 
         if logme:
@@ -101,19 +101,17 @@ class Benchmarker:
 
         logging.info(f"TASK: {task}")
 
-        models = self.models(task, n)
-
-        logging.debug(f"Models: {models}")
-
-        if len(models) == 0:
-            raise Error("ERROR: No models selected!")
-
         benchmarks = {}
 
         check = False
-        for model_name, base_model_identifier, _, _ in models:
-            if check and self.auto_increment_if_failed:
-                models += self.models(task, 1)
+
+        idx = 0
+
+        while idx < n: 
+            model_name, base_model_identifier, _, _ = self.models(task, 1)[0]
+            
+            if model_name in benchmarks:
+                continue
 
             check = False
 
@@ -193,6 +191,12 @@ class Benchmarker:
                 with open(model_checkpoint_pth + "/config.json", "w") as fp:
                     json.dump(config, fp)
             del use_checkpoint, features, targets
+
+            if check and self.auto_increment_if_failed:
+                pass 
+            else: 
+                idx += 1
+
         return benchmarks
 
     def extract_features_and_targets(self, extractor, dataloader, n, only_feature=False):

@@ -6,6 +6,7 @@ from PIL import Image
 import pydub
 import logging
 
+
 class DataLoader:
     def __init__(self):
         pass
@@ -75,7 +76,7 @@ class TextDataLoader(DataLoader):
     def __call__(self):
         self.idx += 1
         if (self.idx >= self.len) or (self.max_idx and self.idx > self.max_idx):
-            logging.info("     Dataloader exhausted!")
+            logging.info("Dataloader exhausted!")
             return None
         row = self.dataframe.iloc[self.idx]
         return (row["input"], row["target"])

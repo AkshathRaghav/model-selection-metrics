@@ -1,1 +1,0 @@
-{"model_name": "ASCCCCCCCC/distilbert-base-chinese-amazon_zh_20000", "dataset_name": "tweets", "score": -1.749202143390893, "features_pth": "./checkpoints/text-classification_tweets/ASCCCCCCCC_distilbert-base-chinese-amazon_zh_20000//features.npy", "targets_pth": "./checkpoints/text-classification_tweets/ASCCCCCCCC_distilbert-base-chinese-amazon_zh_20000//targets.npy"}
