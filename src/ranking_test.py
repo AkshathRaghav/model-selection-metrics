@@ -32,6 +32,6 @@ config = {
     'n': 3
 }
 
-benchmarker = Benchmarker(models, ckpt=True, logme=True, regression=True)
+benchmarker = Benchmarker(models, ckpt=True, logme=True, regression=True, auto_increment_if_failed=True)
 
 print(benchmarker(config))

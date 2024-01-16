@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd 
 import json
 from tqdm import tqdm
+import warnings 
 
 class Benchmarker:
     def __init__(self, models: Models, logme=True, ckpt=False, regression = False, auto_increment_if_failed = False, leep=False, nce=False, test = False):
@@ -25,7 +26,7 @@ class Benchmarker:
         if logme:
             self.benchmark_model = LogME(regression=regression) 
             self.regression = regression    
-            print(f'SUCCESS: LogME initialized with {"" if regression else "no"} regression')
+            print(f'SUCCESS: LogME initialized with{"" if regression else " no"} regression')
         elif leep: 
             self.benchmark_model = LEEP()
             print('SUCCESS: LEEP initalized')
@@ -182,7 +183,7 @@ class Benchmarker:
         while batch: 
             features, labels = extractor(batch)
             
-            if not features and not labels: 
+            if not len(features) and not len(labels): 
                 batch = dataloader()
                 continue
 
