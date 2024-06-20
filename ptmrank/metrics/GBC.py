@@ -1,67 +1,10 @@
-import numpy as np
-from numba import njit
-from ptmrank.metrics.Metric import MetricNP, MetricError
+from ptmrank.metrics.Metric import Metric, MetricError
 from ptmrank.tools.logger import LoggerSetup
+import torch 
+from typing import Union 
+import numpy as np 
 
-@njit
-def _mean(data):
-    num_rows, num_cols = data.shape
-    means = np.zeros(num_cols, dtype=data.dtype)
-    for col in range(num_cols):
-        col_sum = 0.0
-        for row in range(num_rows):
-            col_sum += data[row, col]
-        means[col] = col_sum / num_rows
-    return means
-
-@njit
-def _gbc(means, inv_cov_means, det_ratios):
-    n_classes = means.shape[0]
-    gbc_score = 0.0
-    for i in range(n_classes):
-        for j in range(n_classes):  
-            if i == j: continue
-            mean_diff = means[i] - means[j]
-            term1 = 0.125 * np.dot(mean_diff.T, np.dot(inv_cov_means[i, j], mean_diff))
-            term2 = 0.5 * np.log(det_ratios[i, j])
-            print(term1, term2)
-            term = np.exp(-(term1 + term2))
-            gbc_score += term
-    return -gbc_score    
-
-@njit 
-def _mu(embeddings: np.ndarray, targets: np.ndarray, classes: np.ndarray, means: np.ndarray) -> np.ndarray: 
-    for ind, c in enumerate(classes):
-        means[ind] = _mean(embeddings[targets == c, :])
-    return means
-
-@njit 
-def _cov(embeddings: np.ndarray, targets: np.ndarray, classes: np.ndarray, means: np.ndarray, covariances: np.ndarray) -> np.ndarray: 
-    for ind, c in enumerate(classes):
-        class_embeddings = embeddings[targets == c, :]
-        if class_embeddings.shape[0] > 1:
-            reg_constant = 1e-5  # Small regularization constant
-            variances = np.cov(class_embeddings, rowvar=False)
-            variances += reg_constant * np.eye(variances.shape[0])
-            variances = np.diag(np.diag(variances))
-            covariances[ind][:, :] = variances
-        else:
-            # If only one example in the class, avoid singular matrix by adding small identity
-            dim = embeddings.shape[1]
-            covariances[ind][:, :] = np.eye(dim) * 0.01
-        
-        # # assert check_cond(covariances[c]), f"Condition number of covariance matrix is too high."
-        # # assert check_positive_semidefinite(covariances[c]), f"Covariance matrix is not positive semidefinite."
-
-    return covariances
-
-def check_positive_semidefinite(matrix: np.ndarray) -> bool:
-    return np.all(np.linalg.eigvals(matrix) > 0)
-
-def check_cond(matrix: np.ndarray) -> bool:
-    return np.linalg.cond(matrix) < 10
-
-class GBC(MetricNP):
+class GBC(Metric):
     """ 
     GBC calculation as proposed in the CVPR 2022 Paper 
     "Transferability Estimation using Bhattacharyya Class Separability"
@@ -81,17 +24,17 @@ class GBC(MetricNP):
     def reset(self):
         self.means = None
         self.covariances = None
-        self.classes = None
         self.embeddings = None
         self.targets = None
         self.class_labels = None
+        self.class_labels_counts = None 
         
     def test(self): 
         self.logger.info("Running test.")
 
         dim = 1024
-        embeddings = np.random.rand(1000, dim)  
-        targets = np.random.randint(0, 5, 1000)
+        embeddings = torch.rand(1000, dim)  
+        targets = torch.randint(0, 5, (1000,))
 
         self.initialize(embeddings, targets)
         _ = self.fit()
@@ -230,12 +173,13 @@ class GBC(MetricNP):
         _ = self.fit()
         self.reset() 
 
-    def initialize(self, embeddings: np.ndarray, targets: np.ndarray) -> None:
+    def initialize(self, embeddings: Union[np.ndarray, torch.Tensor], targets: Union[np.ndarray, torch.Tensor]) -> None:
         super().__init__("Gaussian_Bhattacharyya_Coefficient", embeddings, targets)
 
         self.dim = 64 
 
-        unique, counts = np.unique(targets, return_counts=True)
+        unique = self.class_labels
+        counts = self.class_label_counts
 
         for i in range(len(unique)):
             self.logger.info(f"Class {unique[i]} has {counts[i]} samples.")
@@ -252,70 +196,53 @@ class GBC(MetricNP):
         if self.dim == 64:
                 self.logger.info(f"Setting n_dim to 64.")
 
-        self.classes = unique
-
         self.logger.info("Applying PCA to Embeddings.")
-        self.embeddings = self.apply_PCA(embeddings, n_components=self.dim)
+        self.embeddings = torch.from_numpy(self.apply_PCA(embeddings, n_components=self.dim))
         self.logger.info("PCA Applied.")
 
         self.logger.info(f"Shape of final featurs: {self.embeddings.shape}")
 
-        self.means = np.zeros((len(self.class_labels), self.dim), dtype=np.float64)
-        self.covariances = np.zeros((len(self.class_labels), self.dim, self.dim), dtype=np.float64)
+        self.means = torch.zeros((len(self.class_labels), self.dim), dtype=torch.float64)
+        self.covariances = torch.zeros((len(self.class_labels), self.dim, self.dim), dtype=torch.float64)
 
         self.logger.info("Initialization Complete.")
 
     @staticmethod
     def _d_b(mean1, cov1, mean2, cov2):
-        def power_round(value):
-            value_str = f"{value:.16e}"
-            mantissa, exponent = value_str.split("e")
-            first_three_digits = float(mantissa)
-            exponent = int(exponent)
-            return first_three_digits, exponent
-        
+        cov1 = torch.diag(torch.diag(cov1))
+        cov2 = torch.diag(torch.diag(cov2))
+
         cov_mean = (cov1 + cov2) / 2
-        inv_cov_mean = np.linalg.pinv(cov_mean)
-        det_cov_mean = np.linalg.det(cov_mean)
-        det_cov1 = np.linalg.det(cov1)
-        det_cov2 = np.linalg.det(cov2)
+        inv_cov_mean = torch.linalg.pinv(cov_mean)
+        det_cov_mean = torch.linalg.det(cov_mean)
+        det_cov1 = torch.linalg.det(cov1)
+        det_cov2 = torch.linalg.det(cov2)
 
-        ## NOTE: An attempt at approximating the det_ratio calculation 
-        ## If we apply norm on the embeddings, we get underflow. 
-        # det_cov1, det_cov1_power = power_round(det_cov1)
-        # det_cov2, det_cov2_power = power_round(det_cov2)
-        # det_cov_mean, det_cov_mean_power = power_round(det_cov_mean)
-
-        # denom_power = np.ceil((det_cov1_power + det_cov2_power)/2)
-        # denom_value = np.sqrt(det_cov1 * det_cov2) 
-        # det_ratio = (det_cov_mean / denom_value) * (10 ** (det_cov_mean_power - denom_power)) 
-
-        det_ratio = det_cov_mean / np.sqrt(det_cov1 * det_cov2) 
+        det_ratio = det_cov_mean / torch.sqrt(det_cov1 * det_cov2) 
 
         return inv_cov_mean, det_ratio
     
     def gbc(self):
         n_classes = len(self.means)
-        inv_cov_means = np.empty((n_classes, n_classes, 64, 64))
-        det_ratios = np.zeros((n_classes, n_classes))
 
-        # Pre computing for njit parallelization
-        self.logger.info("Precomputing np.linalg.pinv and np.linalg.det operations.")
+        gbc_score = 0.0
         for i in range(n_classes):
             for j in range(n_classes):
                 if i == j: continue
-                inv_cov_means[i, j], det_ratios[i, j] = GBC._d_b(None, self.covariances[i], None, self.covariances[j])
+                inv_cov_mean, det_ratio = GBC._d_b(None, self.covariances[i], None, self.covariances[j])
+                mean_diff = self.means[i] - self.means[j]
+                term1 = 0.125 * torch.matmul(mean_diff, torch.matmul(inv_cov_mean, mean_diff))
+                term2 = 0.5 * torch.log(det_ratio)
+                term = torch.exp(-(term1 + term2))
+                gbc_score += term
 
-        self.logger.info("Precomputation Complete.")
-        
-        return _gbc(self.means, inv_cov_means, det_ratios)
+        return -gbc_score    
 
     def fit(self): 
-        np.seterr(all='raise')
         self.logger.info("Fitting GBC Metric.")
 
-        self.means = _mu(self.embeddings, self.targets, self.classes, self.means)
-        self.covariances = _cov(self.embeddings, self.targets, self.classes, self.means, self.covariances)
+        self.means = self._mu(self.means)
+        self.covariances = self._cov(self.covariances)
         self.logger.info("Means and Covariances Calulated.")
 
         score = self.gbc() 
@@ -325,3 +252,4 @@ class GBC(MetricNP):
     
 GBC().replicate_paper_results()
 
+# python -m ptmrank.metrics.GBC_torch
