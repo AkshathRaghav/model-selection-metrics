@@ -93,7 +93,6 @@ class GBC(Metric):
             plt.grid(True)
             plt.show()
 
-
         self.logger.info("Replicating Paper Results for GBC Metric.")
         self.logger.info("Loading CIFAR-10 Subset.")
 
@@ -137,7 +136,7 @@ class GBC(Metric):
         self.logger.info(f"Features Extracted with shape: {embeddings.shape}")
 
         self.initialize(embeddings, targets)
-        _ = self.fit()
+        self.fit()
         self.reset() 
 
         # import timm
@@ -170,7 +169,7 @@ class GBC(Metric):
         self.logger.info(f"Features Extracted with shape: {embeddings.shape}")
 
         self.initialize(embeddings, targets)
-        _ = self.fit()
+        self.fit()
         self.reset() 
 
     def initialize(self, embeddings: Union[np.ndarray, torch.Tensor], targets: Union[np.ndarray, torch.Tensor]) -> None:
@@ -252,4 +251,4 @@ class GBC(Metric):
     
 GBC().replicate_paper_results()
 
-# python -m ptmrank.metrics.GBC_torch
+# python -m ptmrank.metrics.GBC

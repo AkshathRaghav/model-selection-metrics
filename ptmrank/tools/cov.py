@@ -1,3 +1,10 @@
+""" 
+Credit: https://gist.github.com/xmodar/5ab449acba9df1a26c12060240773110
+Why? np.cov(rowvar=False) is not implemented in torch.
+
+Discussion thread in torch: https://github.com/pytorch/pytorch/issues/19037
+"""
+
 import torch 
 
 def cov(tensor, rowvar=True, bias=False):

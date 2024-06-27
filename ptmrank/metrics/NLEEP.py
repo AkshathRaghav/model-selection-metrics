@@ -5,27 +5,10 @@
 from ptmrank.metrics.Metric import Metric, MetricError
 from ptmrank.tools.logger import LoggerSetup
 import numpy as np
+import torch
 from numba import njit
 from sklearn.mixture import GaussianMixture
 from sklearn.decomposition import PCA
-
-@njit(parallel=True)
-def _sum(data):
-    num_rows, num_cols = data.shape
-    means = np.zeros(num_cols, dtype=data.dtype)
-    for col in range(num_cols):
-        col_sum = 0.0
-        for row in range(num_rows):
-            col_sum += data[row, col]
-        means[col] = col_sum
-    return means
-
-@njit(parallel=True)
-def _pyz(y, n, num_classes, n_components_num, prob):
-    pyz = np.zeros((len(num_classes), n_components_num))
-    for y_ in num_classes:
-        pyz[y_] = _sum(prob[y==y_]) / n  
-    return pyz / _sum(pyz)
 
 def _NLEEP(X, y, component_ratio=5):
 
@@ -47,10 +30,8 @@ def _NLEEP(X, y, component_ratio=5):
         indices = np.where(y == y_)[0]
         filter_ = np.take(prob, indices, axis=0) 
         pyz[y_] = np.sum(filter_, axis=0) / n   
-        print(pyz[y_].shape) 
 
     pz = np.sum(pyz, axis=0)    
-    # print(pz)
     py_z = pyz / pz             
     py_x = np.dot(prob, py_z.T) 
 
@@ -80,11 +61,8 @@ class NLEEP(Metric):
         self.logger.info("Running test.")
 
         dim = 1024
-        embeddings = np.random.rand(1000, dim)
-        targets = np.random.randint(0, 3, 1000)
-
-        _ = _sum(np.random.rand(10, 10))
-        _ = _pyz(np.random.randint(0, 3, 10), 10, [0, 1, 2], 15, np.random.rand(10, 15))
+        embeddings = torch.rand(1000, dim)
+        targets = torch.randint(0, 3, (1000,))
 
         score2 = _NLEEP(embeddings, targets)
         self.initialize(embeddings, targets)
@@ -117,13 +95,17 @@ class NLEEP(Metric):
 
         n_components_num = 5 * num_classes
         gmm = GaussianMixture(n_components=n_components_num).fit(self.embeddings)
-        prob = gmm.predict_proba(self.embeddings)  # p(z|x)
+        prob = torch.from_numpy(gmm.predict_proba(self.embeddings)).float()  # p(z|x)
 
-        py_z = _pyz(y, n, self.class_labels, n_components_num, prob)         
-        py_x = np.dot(prob, py_z.T) 
+        pyz = torch.zeros(num_classes, n_components_num)
+        for y_ in self.class_labels:
+            a = torch.sum(prob[y==y_], dim=(0,))
+            pyz[y_] = a / n  
+        py_z = pyz / torch.sum(pyz, dim=(0,))
+        py_x = torch.matmul(prob, py_z.T) 
 
-        nleep_score = np.sum(py_x[np.arange(n), y]) / n
+        nleep_score = torch.sum(py_x[np.arange(n), y]) / n
         self.logger.info(f"NLEEP: {nleep_score:.2f}")
         return nleep_score
 
-# NLEEP().test()
+NLEEP().test()

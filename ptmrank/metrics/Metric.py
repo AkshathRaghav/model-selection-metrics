@@ -12,8 +12,8 @@ class Metric:
     def __init__(self, name: str, embeddings: Union[np.ndarray, torch.Tensor], targets: Union[np.ndarray, torch.Tensor], structured: bool = True) -> None: 
         self.name = name
 
-        if isinstance(embeddings, np.ndarray): embeddings = torch.from_numpy(embeddings)
-        if isinstance(targets, np.ndarray): targets = torch.from_numpy(targets)
+        if isinstance(embeddings, np.ndarray): embeddings = torch.from_numpy(embeddings).float()
+        if isinstance(targets, np.ndarray): targets = torch.from_numpy(targets).int()
 
         self.embeddings = embeddings
         self.targets = targets
@@ -73,3 +73,47 @@ class Metric:
 
         return covariances
 
+class MetricNP: 
+    def __init__(self, name: str, embeddings: np.ndarray, targets: np.ndarray, structured: bool = True) -> None: 
+        self.name = name
+        self.embeddings = embeddings
+        self.targets = targets
+
+        if structured:
+            assert self.check_structured_classes(), f"{self.name} requires structured class labels."
+            self.class_labels = np.unique(targets).astype(np.int64)
+
+    def __str__(self): 
+        return self.name
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        return self.fit() 
+
+    def fit(self): 
+        raise NotImplementedError
+
+    def check_structured_classes(self) -> bool:
+        """ 
+        Checks if the targets are structured class labels. 
+        Transferrability metrics do not accoun for unstructured outputs from generative models like LLMs/VAEs/GANs/etc.
+        """
+
+        if isinstance(self.targets, np.ndarray):
+            return len(np.unique(self.targets)) != self.targets.shape[0]
+        else: 
+            raise ValueError("Targets must be either a numpy array.")
+
+    def replicate_paper_results(self): 
+        """ 
+        Only for modules that have not been adapted from the original source.
+        """
+        raise NotImplementedError
+
+    def apply_PCA(self, embeddings: np.ndarray, n_components: int = 64): 
+        return PCA(n_components=n_components).fit_transform(embeddings)
+
+    def apply_kendall_tau(self, accuracies: np.ndarray, scores: np.ndarray):
+        return kendalltau(accuracies, scores).statistic
+
+    def scale(self, embeddings: np.ndarray) -> np.ndarray:
+        return embeddings / np.linalg.norm(embeddings, ord=2, axis=1, keepdims=True)

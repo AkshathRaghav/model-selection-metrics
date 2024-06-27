@@ -7,55 +7,11 @@ import numpy as np
 from ptmrank.metrics.Metric import Metric, MetricError
 from ptmrank.tools.logger import LoggerSetup
 from numba import njit
+import torch 
+from ..tools.cov import cov 
 from sklearn.covariance import LedoitWolf
-        
-@njit(parallel=True)
-def _mean(data):
-    num_rows, num_cols = data.shape
-    means = np.zeros(num_cols, dtype=data.dtype)
-    for col in range(num_cols):
-        col_sum = 0.0
-        for row in range(num_rows):
-            col_sum += data[row, col]
-        means[col] = col_sum / num_rows
-    return means
 
 
-@njit(parallel=True)
-def mean_axis_0_keepdims(X):
-    num_rows, num_cols = X.shape
-    means = np.zeros(num_cols)
-    for col in range(num_cols):
-        col_sum = 0.0
-        for row in range(num_rows):
-            col_sum += X[row, col]
-        means[col] = col_sum / num_rows
-    tot = np.zeros((num_rows, num_cols))
-    for row in range(num_rows):
-        tot[row, :] = means
-    return tot
-
-@njit
-def getHscore(f,Z,z_):
-    Covf=np.cov(f, rowvar=False)
-    
-    g=np.zeros_like(f)
-    for z in z_:
-        g[Z == z]=_mean(f[Z == z])
-    
-    Covg=np.cov(g, rowvar=False)
-    score=np.trace(np.dot(np.linalg.pinv(Covf,rcond=1e-15), Covg))
-    return score
-
-@njit
-def getHAlphascore(shrinkage,covariance,f,Z,z_):
-    g = np.zeros_like(f)
-    for z in z_:
-        g[Z == z]=_mean(f[Z == z])
-    
-    Covg=np.cov(g, rowvar=False)
-    score=np.trace(np.dot(np.linalg.pinv(covariance, rcond=1e-15), (1 - shrinkage) * Covg))
-    return score
 
 def h_score(features: np.ndarray, labels: np.ndarray):
     r"""
@@ -157,19 +113,15 @@ class HScore(Metric):
         self.targets = None
     
     def test(self): 
-        """ 
-        Tests to confirm compilation and lack of runtime errors. Does not validate the correctness of the metric.
-        """
-        
         self.logger.info("Running test.")
 
         dim = 1024
-        embeddings = np.random.rand(1000, dim)  
-        targets = np.random.randint(0, 3, 1000)
+        embeddings = torch.rand(1000, dim)
+        targets = torch.randint(0, 3, (1000,))
 
         self.initialize(embeddings, targets)
         score1 = self.fit()
-        score2 = h_score(embeddings, targets)
+        score2 = h_score(embeddings.detach().numpy(), targets.detach().numpy())
         self.reset()
         
         if not np.isclose(score1, score2, atol=1e-2):
@@ -190,9 +142,21 @@ class HScore(Metric):
         self.logger.info(f"Shape of final featurs: {self.embeddings.shape}")
         self.logger.info("Initialization Complete.")
 
+    @staticmethod    
+    def getHscore(f,Z,z_):
+        Covf=cov(f, rowvar=False)
+        
+        g=torch.zeros_like(f)
+        for z in z_:
+            g[Z == z]=torch.mean(f[Z == z], dim=(0,))
+        
+        Covg=cov(g, rowvar=False)
+        score=torch.trace(torch.matmul(torch.linalg.pinv(Covf,rcond=1e-15), Covg))
+        return score
+
     def fit(self) -> float:
         self.logger.info("Calculating H-Score.")
-        score = getHscore(self.embeddings, self.targets, self.classes)
+        score = HScore.getHscore(self.embeddings, self.targets, self.classes)
         self.logger.info(f"H-Score: {score:.2f}")
         return score
 
@@ -222,12 +186,12 @@ class HAlpha_Score(Metric):
         self.logger.info("Running test.")
 
         dim = 1024
-        embeddings = np.random.rand(1000, dim)  
-        targets = np.random.randint(0, 2, 1000)
+        embeddings = torch.rand(1000, dim)
+        targets = torch.randint(0, 3, (1000,))
 
         self.initialize(embeddings, targets)
         score1 = self.fit()
-        score2 = regularized_h_score(embeddings, targets)
+        score2 = regularized_h_score(embeddings.detach().numpy(), targets.detach().numpy())
         self.reset()
         
         if not np.isclose(score1, score2, atol=1e-2):
@@ -248,13 +212,25 @@ class HAlpha_Score(Metric):
         self.logger.info(f"Shape of final featurs: {self.embeddings.shape}")
         self.logger.info("Initialization Complete.")
 
+    @staticmethod
+    def getHAlphascore(shrinkage,covariance,f,Z,z_):
+        g = torch.zeros_like(f)
+        for z in z_:
+            g[Z == z]=torch.mean(f[Z == z], dim=(0,))
+        
+        Covg=cov(g, rowvar=False)
+        score=torch.trace(torch.matmul(torch.linalg.pinv(covariance, rcond=1e-15), (1 - shrinkage) * Covg))
+        return score
+
     def fit(self) -> float:
         self.logger.info("Calculating H-Score.")
-        centered_embeddings = self.embeddings - np.mean(self.embeddings, axis=0, keepdims=True)
+        centered_embeddings = self.embeddings - torch.mean(self.embeddings, dim=0, keepdims=True)
         shrunk_cov = LedoitWolf(assume_centered=False).fit(centered_embeddings)
-        score = getHAlphascore(shrunk_cov.shrinkage_, shrunk_cov.covariance_, self.embeddings, self.targets, self.classes)
+        score = HAlpha_Score.getHAlphascore(shrunk_cov.shrinkage_, torch.from_numpy(shrunk_cov.covariance_), self.embeddings, self.targets, self.classes)
+        
         self.logger.info(f"Regularized H-Score: {score:.2f}")
         return score
+
 
 # HScore().test()
 # HAlpha_Score().test()
